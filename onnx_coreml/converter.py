@@ -620,8 +620,17 @@ def convert(model,  # type: Union[onnx.ModelProto, Text]
     err = ErrorHandling(add_custom_layers,
                         custom_conversion_functions)
 
+    # FIXME: Hack!! Explicitly specify shapes of the inputs to all Slice operators:
+    # TODO: the shapes are *WRONG*! We need to provide correct values below.
+    graph.shape_dict.update({
+        '380': (1, 301, 257, 2),
+        'x_out': (1, 301, 257, 2),
+        '407': (1, 301, 257, 2),
+    })
+
     for i, node in enumerate(graph.nodes):
-        print("%d/%d: Converting Node Type %s" %(i+1, len(graph.nodes), node.op_type))
+        print("%d/%d: Converting Node %s of Type %s :: in %s out %s" % (
+            i+1, len(graph.nodes), node.name, node.op_type, node.inputs, node.outputs))
         if disable_coreml_rank5_mapping:
             _convert_node_nd(builder, node, graph, err)
         else:
