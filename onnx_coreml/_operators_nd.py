@@ -1955,7 +1955,10 @@ def _convert_slice(builder, node, graph, err):
        return _convert_slice_ir4v9(builder, node, graph, err)
 
     if node.inputs[0] not in graph.shape_dict:
-        err.unsupported_op_configuration(builder, node, graph, "Input shape not available")
+        err.unsupported_op_configuration(
+            builder, node, graph,
+            "Input shape not available for %s :: expected one of %s"
+            % (node.inputs[0], graph.shape_dict))
 
     data_shape = graph.shape_dict[node.inputs[0]]
     len_of_data = len(data_shape)

@@ -204,27 +204,20 @@ def _make_coreml_output_features(graph, forceShape=False, disable_coreml_rank5_m
     return features
 
 def _check_unsupported_ops(nodes, disable_coreml_rank5_mapping=False): # type: (...) -> None
-    unsupported_op_types = [] # type: List[Text]
+    supported_ops = _ONNX_NODE_REGISTRY_ND if disable_coreml_rank5_mapping else _ONNX_NODE_REGISTRY
+    unsupported_ops = {} # type: Dict{Text: [Text]}
     for node in nodes:
-
-        if disable_coreml_rank5_mapping:
-            if node.op_type not in _ONNX_NODE_REGISTRY_ND and \
-                    node.op_type not in unsupported_op_types:
-                unsupported_op_types.append(node.op_type)
-            continue
-
-        if node.op_type not in _ONNX_NODE_REGISTRY and \
-          node.op_type not in unsupported_op_types:
-            unsupported_op_types.append(node.op_type)
+        if node.op_type not in supported_ops:
+            unsupported_ops.setdefault(node.op_type, []).append(node.name)
 
     coreml_3_rerun_message = ''
     if not disable_coreml_rank5_mapping:
         coreml_3_rerun_message = '\nPlease try converting again by providing the additonal argument, ' \
                                  'minimum_ios_deployment_target=13' \
                                  ' and making sure you have the latest coremltools package'
-    if len(unsupported_op_types) > 0:
-        raise NotImplementedError("Unsupported ONNX ops of type: %s %s" % (
-            ','.join(unsupported_op_types), coreml_3_rerun_message))
+    if unsupported_ops:
+        raise NotImplementedError("Unsupported ONNX ops:\n%s\n%s" % (
+            unsupported_ops, coreml_3_rerun_message))
 
 
 def _update_multiarray_to_float32(feature, #type: Any
@@ -620,8 +613,17 @@ def convert(model,  # type: Union[onnx.ModelProto, Text]
     err = ErrorHandling(add_custom_layers,
                         custom_conversion_functions)
 
+    # FIXME: Hack!! Explicitly specify shapes of the inputs to all Slice operators:
+    # TODO: the shapes are *WRONG*! We need to provide correct values below.
+    graph.shape_dict.update({
+        '380': (1, 301, 257, 2),
+        'x_out': (1, 301, 257, 2),
+        '407': (1, 301, 257, 2),
+    })
+
     for i, node in enumerate(graph.nodes):
-        print("%d/%d: Converting Node Type %s" %(i+1, len(graph.nodes), node.op_type))
+        print("%d/%d: Converting Node %s of Type %s :: in %s out %s" % (
+            i+1, len(graph.nodes), node.name, node.op_type, node.inputs, node.outputs))
         if disable_coreml_rank5_mapping:
             _convert_node_nd(builder, node, graph, err)
         else:
